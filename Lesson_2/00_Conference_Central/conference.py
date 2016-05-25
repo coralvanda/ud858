@@ -90,7 +90,7 @@ SESSION_DEFAULTS = {
             "speaker": "Default speaker",
             "duration": 0,
             "type_of_session": "default type",
-            "start_time": (0, 0),
+            "start_time": 0
             }
 
 OPERATORS = {
@@ -515,7 +515,8 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(message_types.VoidMessage, StringMessage,
             path='conference/announcement/get',
-            http_method='GET', name='getAnnouncement')
+            http_method='GET', 
+            name='getAnnouncement')
     def getAnnouncement(self, request):
         """Return Announcement from memcache."""
         # return an existing announcement from Memcache or an empty string.
@@ -531,12 +532,21 @@ class ConferenceApi(remote.Service):
         sf = SessionForm()
         for field in sf.all_fields():
             if hasattr(session, field.name):
-                if field.name.endswith("Date"):
+                if field.name.endswith("date"):
                     setattr(sf, field.name, str(getattr(session, field.name)))
                 else:
                     setattr(sf, field.name, getattr(session, field.name))
         sf.check_initialized() 
         return sf
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+        path='getAllSessions',
+        http_method='GET',
+        name='getAllSessions')
+    def getAllSessions(self, request):
+        """Returns all existing sessions"""
+        sessions = Session.query()
+        return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
     #TODO 1
     # getConferenceSessions(websafeConferenceKey)
@@ -546,14 +556,17 @@ class ConferenceApi(remote.Service):
         name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """Given a conference websafekey, return all sessions for it"""
-        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        conf_key = ndb.Key(urlsafe=request.websafeConferenceKey)
+        conf = conf_key.get()
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
-        sessions = conf.sessions
-        return SessionForms(items=[self._copySessionToForm(sess) \
-            for sess in sessions])
+        # old attempt
+        #sessions = conf.sessions
 
+        sessions = Session.query(ancestor=conf_key)
+
+        return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
     #TODO 2
     # getConferenceSessionsByType(websafeConferenceKey, typeOfSession) 
     # (eg lecture, keynote, workshop)
@@ -563,14 +576,10 @@ class ConferenceApi(remote.Service):
         name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
         """Given a conference, return all sessions of a specified type"""
-        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
-        if not conf:
-            raise endpoints.NotFoundException(
-                'No conference found with key: %s' % request.websafeConferenceKey)
-        sessions = conf.sessions
+        c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
+        sessions = Session.query(ancestor=c_key)
         sessions = sessions.filter(Session.type_of_session == request.session_type)
-        return SessionForms(items=[self._copySessionToForm(sess) \
-            for sess in sessions])
+        return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
     #TODO 3
     # getSessionsBySpeaker(speaker)
@@ -587,8 +596,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No speaker found with name %s' % request.name)
         sessions = speaker.hosting_sessions
-        return SessionForms(items=[self._copySessionToForm(sess) \
-            for sess in sessions])
+        return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
     #TODO 4
     # createSession(SessionForm, websafeConferenceKey)
@@ -633,16 +641,21 @@ class ConferenceApi(remote.Service):
         s_id = Session.allocate_ids(size=1, parent=conf_key)[0]
         # create a Session key from ID
         s_key = ndb.Key(Session, s_id, parent=conf_key)
+        # following line not needed?
+        # conf.sessions.append(s_key)
+
         data['key'] = s_key
+        # following line not needed?
+        #data['parent_conf_key'] = request.websafeConferenceKey
 
         # create Session and return modified SessionForm
         Session(**data).put()
-        taskqueue.add(params={'email': user.email(),
-            'sessionInfo': repr(request)},
-            url='/tasks/send_confirmation_email'
-        )
+        #taskqueue.add(params={'email': user.email(),
+        #    'sessionInfo': repr(request)},
+        #    url='/tasks/send_confirmation_email'
+        #)
 
-        return request
+        return self._copySessionToForm(request)
 
     @endpoints.method(SESS_POST_REQUEST, SessionForm,
         path='createSession',

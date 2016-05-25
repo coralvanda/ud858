@@ -119,23 +119,27 @@ class StringMessage(messages.Message):
 
 class Session(Conference):
     """Session - conference session object"""
-    session_name    = ndb.StringProperty(required=True)
+    name            = ndb.StringProperty(required=True)
     highlights      = ndb.StringProperty(repeated=True)
     date            = ndb.DateProperty()
-    start_time      = ndb.TimeProperty()
-    duration        = ndb.FloatProperty()
+    start_time      = ndb.IntegerProperty() #should be given in 24hr time
+    duration        = ndb.IntegerProperty() #should be given in minutes
     speaker         = ndb.StringProperty()
     type_of_session = ndb.StringProperty()
+    # next line no longer needed?
+    #parent_conf_key = ndb.StringProperty()
 
 class SessionForm(messages.Message):
     """Session Form - Session outbound form message"""
     name            = messages.StringField(1)
     highlights      = messages.StringField(2, repeated=True)
-    speaker         = messages.StringField(3)
-    duration        = messages.IntegerField(4)
-    type_of_session = messages.StringField(5)
-    date            = messages.StringField(6)
-    start_time      = messages.IntegerField(7)
+    date            = messages.StringField(3)
+    start_time      = messages.IntegerField(4)
+    duration        = messages.IntegerField(5)
+    speaker         = messages.StringField(6)
+    type_of_session = messages.StringField(7)
+    # next line no longer needed?
+    #parent_conf_key = messages.StringField(8)
 
 class SessionForms(messages.Message):
     """SessionForms -- multiple Session outbound form message"""
