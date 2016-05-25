@@ -561,12 +561,10 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
-        # old attempt
-        #sessions = conf.sessions
-
         sessions = Session.query(ancestor=conf_key)
 
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
+    
     #TODO 2
     # getConferenceSessionsByType(websafeConferenceKey, typeOfSession) 
     # (eg lecture, keynote, workshop)
@@ -579,6 +577,7 @@ class ConferenceApi(remote.Service):
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         sessions = Session.query(ancestor=c_key)
         sessions = sessions.filter(Session.type_of_session == request.session_type)
+
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
     #TODO 3
@@ -641,12 +640,8 @@ class ConferenceApi(remote.Service):
         s_id = Session.allocate_ids(size=1, parent=conf_key)[0]
         # create a Session key from ID
         s_key = ndb.Key(Session, s_id, parent=conf_key)
-        # following line not needed?
-        # conf.sessions.append(s_key)
 
         data['key'] = s_key
-        # following line not needed?
-        #data['parent_conf_key'] = request.websafeConferenceKey
 
         # create Session and return modified SessionForm
         Session(**data).put()
