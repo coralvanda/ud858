@@ -595,8 +595,23 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No speaker found with name %s' % request.name)
         sessions = speaker.hosting_sessions
-        return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
+        all_sessions = Session.query()
+        speaker_sessions = []
+        for session in sessions:
+            speaker_sessions.append(all_sessions.filter(Session.name == session).get())
 
+        return SessionForms(items=[self._copySessionToForm(sess) for sess in speaker_sessions])
+    
+    def _createSpeakerObject(self, request):
+        """If a speaker has been found not to exist, this creates one
+        and immediately adds the first session that references him or her"""
+        speaker = Speaker(
+            name = request.speaker,
+            hosting_sessions = [request.name] # name of session
+            )
+        speaker.put()
+        return None
+        
     #TODO 4
     # createSession(SessionForm, websafeConferenceKey)
     # open only to the organizer of the conference
@@ -645,11 +660,21 @@ class ConferenceApi(remote.Service):
 
         # create Session and return modified SessionForm
         Session(**data).put()
+
+        # TODO: Fix the email alert when adding a session
         #taskqueue.add(params={'email': user.email(),
         #    'sessionInfo': repr(request)},
         #    url='/tasks/send_confirmation_email'
         #)
-
+        
+        if request.speaker:
+            speaker = Speaker.query()
+            speaker = speaker.filter(Speaker.name == request.speaker).get()
+            if not speaker:
+                self._createSpeakerObject(request)
+            else:
+                speaker.hosting_sessions.append(request.name)     
+        
         return self._copySessionToForm(request)
 
     @endpoints.method(SESS_POST_REQUEST, SessionForm,
@@ -659,9 +684,6 @@ class ConferenceApi(remote.Service):
     def createSession(self, request):
         """Create a new session."""
         return self._createSessionObject(request)
-
-    #TODO: create speaker object (probably inside the createSession method
-    # or the _createSessionObject method)
 
 
 # registers API
