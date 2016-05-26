@@ -662,10 +662,11 @@ class ConferenceApi(remote.Service):
         Session(**data).put()
 
         # TODO: Fix the email alert when adding a session
-        #taskqueue.add(params={'email': user.email(),
-        #    'sessionInfo': repr(request)},
-        #    url='/tasks/send_confirmation_email'
-        #)
+        user = endpoints.get_current_user()
+        taskqueue.add(params={'email': user.email(),
+            'sessionInfo': repr(request.name)},
+            url='/tasks/send_session_email'
+        )
         
         if request.speaker:
             speaker = Speaker.query()
@@ -673,7 +674,8 @@ class ConferenceApi(remote.Service):
             if not speaker:
                 self._createSpeakerObject(request)
             else:
-                speaker.hosting_sessions.append(request.name)     
+                speaker.hosting_sessions.append(request.name)
+                speaker.put()     
         
         return self._copySessionToForm(request)
 

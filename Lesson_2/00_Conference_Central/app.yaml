@@ -45,6 +45,10 @@ handlers:       # static then dynamic
 - url: /tasks/send_confirmation_email
   script: main.app
   login: admin
+
+- url: /tasks/send_session_email
+  script: main.session_app
+  login: admin
   
 - url: .*
   script: main.app
