@@ -664,7 +664,7 @@ class ConferenceApi(remote.Service):
         # TODO: Fix the email alert when adding a session
         user = endpoints.get_current_user()
         taskqueue.add(params={'email': user.email(),
-            'sessionInfo': repr(request.name)},
+            'sessionInfo': repr(request)},
             url='/tasks/send_session_email'
         )
         

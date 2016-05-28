@@ -47,7 +47,7 @@ handlers:       # static then dynamic
   login: admin
 
 - url: /tasks/send_session_email
-  script: main.session_app
+  script: main.app
   login: admin
   
 - url: .*
