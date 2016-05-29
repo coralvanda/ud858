@@ -77,6 +77,11 @@ SESS_POST_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
+SESS_WISHLIST_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeSessionKey=messages.StringField(1),
+)
+
 
 DEFAULTS = {
             "city": "Default City",
@@ -536,6 +541,8 @@ class ConferenceApi(remote.Service):
                     setattr(sf, field.name, str(getattr(session, field.name)))
                 else:
                     setattr(sf, field.name, getattr(session, field.name))
+            elif field.name == "websafeKey":
+                setattr(sf, field.name, session.key.urlsafe())
         sf.check_initialized() 
         return sf
 
@@ -661,8 +668,7 @@ class ConferenceApi(remote.Service):
         # create Session and return modified SessionForm
         Session(**data).put()
 
-        # TODO: Fix the email alert when adding a session
-        user = endpoints.get_current_user()
+        # TODO: Make email look nicer for user.
         taskqueue.add(params={'email': user.email(),
             'sessionInfo': repr(request)},
             url='/tasks/send_session_email'
@@ -686,6 +692,40 @@ class ConferenceApi(remote.Service):
     def createSession(self, request):
         """Create a new session."""
         return self._createSessionObject(request)
+
+# - - - Session wishlist - - - - - - - - - - - - - - - - -
+
+    @endpoints.method(SESS_WISHLIST_GET_REQUEST, BooleanMessage,
+        path='session/{websafeSessionKey}',
+        http_method='POST',
+        name='addSessionToWishlist')
+    def addSessionToWishlist(self, request, add_to_list=True):
+        '''Add session to user's list of sessions they want to attend.'''
+        prof = self._getProfileFromUser()
+        return_value = None
+
+        wssk = request.websafeSessionKey
+        session = ndb.Key(urlsafe=wssk).get()
+        if not session:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % wssk)
+
+        if add_to_list:
+            if wssk in prof.session_wishlist:
+                raise ConflictException(
+                    "This session is already on your wishlist")
+
+            prof.session_wishlist.append(wssk)
+            return_value = True
+        else:
+            if wssk in prof.session_wishlist:
+                prof.session_wishlist.remove(wssk)
+                return_value = True
+            else:
+                return_value = False
+        prof.put()
+        return BooleanMessage(data=return_value)
+
 
 
 # registers API
