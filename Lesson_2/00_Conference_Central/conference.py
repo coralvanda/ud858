@@ -644,6 +644,7 @@ class ConferenceApi(remote.Service):
 
         data = {field.name: getattr(request, field.name)
             for field in request.all_fields()}
+        del data['websafeKey']
         del data['websafeConferenceKey']
 
         # fill in default values for missing fields
@@ -668,9 +669,11 @@ class ConferenceApi(remote.Service):
         # create Session and return modified SessionForm
         Session(**data).put()
 
-        # TODO: Make email look nicer for user.
+        # TODO: Make email look nicer for user. Maybe
+        # I can use self._copySessionToForm() here?
+        formatted_session = self._copySessionToForm(request)
         taskqueue.add(params={'email': user.email(),
-            'sessionInfo': repr(request)},
+            'sessionInfo': repr(formatted_session)},
             url='/tasks/send_session_email'
         )
         
