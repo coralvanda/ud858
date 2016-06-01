@@ -669,8 +669,6 @@ class ConferenceApi(remote.Service):
         # create Session and return modified SessionForm
         Session(**data).put()
 
-        # TODO: Make email look nicer for user. Maybe
-        # I can use self._copySessionToForm() here?
         formatted_session = self._copySessionToForm(request)
         taskqueue.add(params={'email': user.email(),
             'sessionInfo': repr(formatted_session)},
@@ -729,10 +727,21 @@ class ConferenceApi(remote.Service):
         prof.put()
         return BooleanMessage(data=return_value)
 
-
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+        path='sessions/wishlist',
+        http_method='GET',
+        name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        '''Get list of sessions user has added to wishlist'''
+        user = self._getProfileFromUser()
+        session_keys = [ndb.Key(urlsafe=x) for x in user.session_wishlist]
+        sessions = ndb.get_multi(session_keys)
+        return SessionForms(items=[self._copySessionToForm(session)\
+            for session in sessions])
 
 # registers API
 api = endpoints.api_server([ConferenceApi])
 
 
 # ahtzfmNvbmZlcmVuY2UtY2VudGVyLXByb2plY3RyMwsSB1Byb2ZpbGUiFGNvcmFsdmFuZGFAZ21haWwuY29tDAsSCkNvbmZlcmVuY2UYkb8FDA
+
