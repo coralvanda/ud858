@@ -695,13 +695,8 @@ class ConferenceApi(remote.Service):
         return self._createSessionObject(request)
 
 # - - - Session wishlist - - - - - - - - - - - - - - - - -
-
-    @endpoints.method(SESS_WISHLIST_GET_REQUEST, BooleanMessage,
-        path='session/{websafeSessionKey}',
-        http_method='POST',
-        name='addSessionToWishlist')
-    def addSessionToWishlist(self, request, add_to_list=True):
-        '''Add session to user's list of sessions they want to attend.'''
+    def _sessionWishlist(self, request, add_to_list=True):
+        '''Add/remove session to/from user's wishlist'''
         prof = self._getProfileFromUser()
         return_value = None
 
@@ -727,6 +722,15 @@ class ConferenceApi(remote.Service):
         prof.put()
         return BooleanMessage(data=return_value)
 
+
+    @endpoints.method(SESS_WISHLIST_GET_REQUEST, BooleanMessage,
+        path='session/{websafeSessionKey}',
+        http_method='POST',
+        name='addSessionToWishlist')
+    def addSessionToWishlist(self, request, add_to_list=True):
+        '''Add session to user's list of sessions they want to attend.'''
+        return self._sessionWishlist
+
     @endpoints.method(message_types.VoidMessage, SessionForms,
         path='sessions/wishlist',
         http_method='GET',
@@ -738,6 +742,15 @@ class ConferenceApi(remote.Service):
         sessions = ndb.get_multi(session_keys)
         return SessionForms(items=[self._copySessionToForm(session)\
             for session in sessions])
+
+    @endpoints.method(SESS_WISHLIST_GET_REQUEST, BooleanMessage,
+        path='session/{websafeSessionKey}/remove',
+        http_method='DELETE',
+        name='deleteSessionInWishlist')
+    def deleteSessionInWishlist(self, request):
+        """Remove session from user's wishlist"""
+        return self._sessionWishlist(request, add_to_list=False)
+
 
 # registers API
 api = endpoints.api_server([ConferenceApi])
