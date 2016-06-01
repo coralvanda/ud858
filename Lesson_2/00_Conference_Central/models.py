@@ -94,15 +94,15 @@ class ConferenceForms(messages.Message):
     """ConferenceForms -- multiple Conference outbound form message"""
     items = messages.MessageField(ConferenceForm, 1, repeated=True)
 
-class ConferenceQueryForm(messages.Message):
+class QueryForm(messages.Message):
     """ConferenceQueryForm -- Conference query inbound form message"""
     field = messages.StringField(1)
     operator = messages.StringField(2)
     value = messages.StringField(3)
 
-class ConferenceQueryForms(messages.Message):
+class QueryForms(messages.Message):
     """ConferenceQueryForms -- multiple ConferenceQueryForm inbound form message"""
-    filters = messages.MessageField(ConferenceQueryForm, 1, repeated=True)
+    filters = messages.MessageField(QueryForm, 1, repeated=True)
 
 # needed for conference registration
 class BooleanMessage(messages.Message):
@@ -153,5 +153,5 @@ class SpeakerForm(messages.Message):
     hosting_sessions    = messages.StringField(2, repeated=True)
 
 class SpeakerQueryForm(messages.Message):
-    """ConferenceQueryForm -- Conference query inbound form message"""
+    """SpeakerQueryForm -- Speaker query inbound form message"""
     name = messages.StringField(1)

@@ -36,8 +36,8 @@ from models import TeeShirtSize
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
-from models import ConferenceQueryForm
-from models import ConferenceQueryForms
+from models import QueryForm
+from models import QueryForms
 from models import BooleanMessage
 from models import ConflictException
 from models import StringMessage
@@ -112,6 +112,11 @@ FIELDS =    {
             'TOPIC': 'topics',
             'MONTH': 'month',
             'MAX_ATTENDEES': 'maxAttendees',
+            'SEATS_AVAILABLE': 'seatsAvailable',
+            'START_TIME': 'start_time',
+            'DURATION': 'duration',
+            'TYPE_OF_SESSION': 'type_of_session',
+            'HIGHLIGHTS': 'highlights'
             }
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -333,7 +338,7 @@ class ConferenceApi(remote.Service):
         return (inequality_field, formatted_filters)
 
 
-    @endpoints.method(ConferenceQueryForms, ConferenceForms,
+    @endpoints.method(QueryForms, ConferenceForms,
         path='queryConferences',
         http_method='POST',
         name='queryConferences')
@@ -569,7 +574,6 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=conf_key)
-
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
     
     #TODO 2
@@ -584,7 +588,6 @@ class ConferenceApi(remote.Service):
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         sessions = Session.query(ancestor=c_key)
         sessions = sessions.filter(Session.type_of_session == request.session_type)
-
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
     #TODO 3
@@ -628,7 +631,6 @@ class ConferenceApi(remote.Service):
         if not user:
             raise endpoints.UnauthorizedException("Authorization required")
         user_id = getUserId(user)
-
         conf_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         conf = conf_key.get()
         if not conf:
@@ -646,35 +648,28 @@ class ConferenceApi(remote.Service):
             for field in request.all_fields()}
         del data['websafeKey']
         del data['websafeConferenceKey']
-
         # fill in default values for missing fields
         for df in SESSION_DEFAULTS:
             if data[df] in (None, []):
                 data[df] = SESSION_DEFAULTS[df]
                 setattr(request, df, SESSION_DEFAULTS[df])
-
         # if a session date is provided, create a date object from the string
         if data["date"]:
             data["date"] = datetime.strptime(data["date"][:10], "%Y-%m-%d").date()
         else:
             data["date"] = conf.startDate
-
         # allocate new Session ID with Conference key as parent
         s_id = Session.allocate_ids(size=1, parent=conf_key)[0]
         # create a Session key from ID
         s_key = ndb.Key(Session, s_id, parent=conf_key)
-
         data['key'] = s_key
 
         # create Session and return modified SessionForm
         Session(**data).put()
-
         formatted_session = self._copySessionToForm(request)
         taskqueue.add(params={'email': user.email(),
             'sessionInfo': repr(formatted_session)},
-            url='/tasks/send_session_email'
-        )
-        
+            url='/tasks/send_session_email')
         if request.speaker:
             speaker = Speaker.query()
             speaker = speaker.filter(Speaker.name == request.speaker).get()
@@ -683,7 +678,6 @@ class ConferenceApi(remote.Service):
             else:
                 speaker.hosting_sessions.append(request.name)
                 speaker.put()     
-        
         return self._copySessionToForm(request)
 
     @endpoints.method(SESS_POST_REQUEST, SessionForm,
@@ -694,18 +688,45 @@ class ConferenceApi(remote.Service):
         """Create a new session."""
         return self._createSessionObject(request)
 
+    def _getSessionQuery(self, request):
+        """Return formatted query from the submitted filters."""
+        q = Session.query()
+        inequality_filter, filters = self._formatFilters(request.filters)
+
+        # If exists, sort on inequality filter first
+        if not inequality_filter:
+            q = q.order(Session.name)
+        else:
+            q = q.order(ndb.GenericProperty(inequality_filter))
+            q = q.order(Session.name)
+
+        for filtr in filters:
+            if filtr["field"] in ["start_time", "duration"]:
+                filtr["value"] = int(filtr["value"])
+            formatted_query = ndb.query.FilterNode(filtr["field"], filtr["operator"], filtr["value"])
+            q = q.filter(formatted_query)
+        return q
+
+    @endpoints.method(QueryForms, SessionForms,
+        path='querySessions',
+        http_method='POST',
+        name='querySessions')
+    def querySessions(self, request):
+        """Query for sessions"""
+        sessions = self._getSessionQuery(request)
+        return SessionForms(items=[self._copySessionToForm(session)\
+            for session in sessions])
+
 # - - - Session wishlist - - - - - - - - - - - - - - - - -
     def _sessionWishlist(self, request, add_to_list=True):
         '''Add/remove session to/from user's wishlist'''
         prof = self._getProfileFromUser()
         return_value = None
-
         wssk = request.websafeSessionKey
         session = ndb.Key(urlsafe=wssk).get()
         if not session:
             raise endpoints.NotFoundException(
                 'No session found with key: %s' % wssk)
-
         if add_to_list:
             if wssk in prof.session_wishlist:
                 raise ConflictException(
@@ -721,7 +742,6 @@ class ConferenceApi(remote.Service):
                 return_value = False
         prof.put()
         return BooleanMessage(data=return_value)
-
 
     @endpoints.method(SESS_WISHLIST_GET_REQUEST, BooleanMessage,
         path='session/{websafeSessionKey}',
@@ -757,4 +777,3 @@ api = endpoints.api_server([ConferenceApi])
 
 
 # ahtzfmNvbmZlcmVuY2UtY2VudGVyLXByb2plY3RyMwsSB1Byb2ZpbGUiFGNvcmFsdmFuZGFAZ21haWwuY29tDAsSCkNvbmZlcmVuY2UYkb8FDA
-
