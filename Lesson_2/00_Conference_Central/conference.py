@@ -55,6 +55,7 @@ from settings import WEB_CLIENT_ID
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
+MEMCACHE_FEATURED_SPEAKER_KEY = "FEATURED_SPEAKER"
 
 CONF_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
@@ -345,7 +346,6 @@ class ConferenceApi(remote.Service):
     def queryConferences(self, request):
         """Query for conferences."""
         conferences = self._getQuery(request)
-
          # return individual ConferenceForm object per Conference
         return ConferenceForms(
             items=[self._copyConferenceToForm(conf, "") \
@@ -357,6 +357,7 @@ class ConferenceApi(remote.Service):
         http_method='POST', 
         name='getConferencesCreated')
     def getConferencesCreated(self, request):
+        """Find all conferences created by the current user"""
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
@@ -376,13 +377,13 @@ class ConferenceApi(remote.Service):
         http_method='GET', 
         name='filterPlayground')
     def filterPlayground(self, request):
+        """A place to mess around with some filters in the code"""
         q = Conference.query()
         q = q.filter(Conference.city == "London")
         q = q.filter(Conference.topics == "Medical Innovations")
         q = q.order(Conference.name)
         q = q.filter(Conference.maxAttendees > 10)
         
-
         return ConferenceForms(
             items=[self._copyConferenceToForm(conf, "") for conf in q]
         )
@@ -560,8 +561,6 @@ class ConferenceApi(remote.Service):
         sessions = Session.query()
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
-    #TODO 1
-    # getConferenceSessions(websafeConferenceKey)
     @endpoints.method(CONF_GET_REQUEST, SessionForms,
         path='getConferenceSessions/{websafeConferenceKey}',
         http_method='POST',
@@ -576,9 +575,6 @@ class ConferenceApi(remote.Service):
         sessions = Session.query(ancestor=conf_key)
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
     
-    #TODO 2
-    # getConferenceSessionsByType(websafeConferenceKey, typeOfSession) 
-    # (eg lecture, keynote, workshop)
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
         path='getConferenceSessionsByType/{websafeConferenceKey}',
         http_method='GET',
@@ -590,8 +586,6 @@ class ConferenceApi(remote.Service):
         sessions = sessions.filter(Session.type_of_session == request.session_type)
         return SessionForms(items=[self._copySessionToForm(sess) for sess in sessions])
 
-    #TODO 3
-    # getSessionsBySpeaker(speaker)
     @endpoints.method(SpeakerQueryForm, SessionForms,
         path='getSessionsBySpeaker',
         http_method='GET',
@@ -617,14 +611,10 @@ class ConferenceApi(remote.Service):
         and immediately adds the first session that references him or her"""
         speaker = Speaker(
             name = request.speaker,
-            hosting_sessions = [request.name] # name of session
-            )
+            hosting_sessions = [request.name]) # name of session
         speaker.put()
         return None
         
-    #TODO 4
-    # createSession(SessionForm, websafeConferenceKey)
-    # open only to the organizer of the conference
     def _createSessionObject(self, request):
         """Create Session object, returning SessionForm/request."""
         user = endpoints.get_current_user()
@@ -663,22 +653,56 @@ class ConferenceApi(remote.Service):
         # create a Session key from ID
         s_key = ndb.Key(Session, s_id, parent=conf_key)
         data['key'] = s_key
-
         # create Session and return modified SessionForm
         Session(**data).put()
         formatted_session = self._copySessionToForm(request)
         taskqueue.add(params={'email': user.email(),
             'sessionInfo': repr(formatted_session)},
             url='/tasks/send_session_email')
+
+        """Check for submitted speaker in form. If speaker doesn't exist
+        then create new speaker object. If one already exists, see whether
+        he's hosting other sessions at this conference.  If so, create a
+        memcache feature for him.  Finally, add this session to his list."""
         if request.speaker:
             speaker = Speaker.query()
             speaker = speaker.filter(Speaker.name == request.speaker).get()
             if not speaker:
                 self._createSpeakerObject(request)
             else:
+                sessions = Session.query(ancestor=conf_key)
+                sessions = sessions.filter(Session.speaker == request.speaker).fetch()
+                if len(sessions) > 1:
+                    featured_speaker = '%s is hosting sessions: %s' %(
+                        speaker.name, ', '.join(s.name for s in sessions))
+                else:
+                    featured_speaker = ''
+                taskqueue.add(params={'speaker': featured_speaker},
+                    target='main',
+                    url='/tasks/set_featured_speaker')
                 speaker.hosting_sessions.append(request.name)
-                speaker.put()     
+                speaker.put()   
         return self._copySessionToForm(request)
+    '''
+    def _cacheFeaturedSpeaker(self, speaker):
+        """Sets featured speaker in memcache"""
+        if speaker:
+            memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, speaker)
+        else:
+            memcache.delete(MEMCACHE_FEATURED_SPEAKER_KEY)
+        return speaker
+    '''
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+        path='featuredspeaker',
+        http_method='GET',
+        name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Returns a featured speaker from memcache"""
+        speaker = memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY)
+        if not speaker:
+            speaker = ''
+        return StringMessage(data=speaker)
 
     @endpoints.method(SESS_POST_REQUEST, SessionForm,
         path='createSession',

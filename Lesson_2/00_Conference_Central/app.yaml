@@ -49,6 +49,10 @@ handlers:       # static then dynamic
 - url: /tasks/send_session_email
   script: main.app
   login: admin
+
+- url: /tasks/set_featured_speaker
+  script: main.app
+  login: admin
   
 - url: .*
   script: main.app
