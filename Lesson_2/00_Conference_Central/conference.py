@@ -10,8 +10,6 @@ created by wesc on 2014 apr 21
 
 """
 
-__author__ = 'wesc+api@google.com (Wesley Chun)'
-
 
 from datetime import datetime
 import json
@@ -798,6 +796,3 @@ class ConferenceApi(remote.Service):
 
 # registers API
 api = endpoints.api_server([ConferenceApi])
-
-
-# ahtzfmNvbmZlcmVuY2UtY2VudGVyLXByb2plY3RyMwsSB1Byb2ZpbGUiFGNvcmFsdmFuZGFAZ21haWwuY29tDAsSCkNvbmZlcmVuY2UYkb8FDA
